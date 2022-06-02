@@ -8,7 +8,6 @@ const int WIFI_TIMEOUT = 15;
 IPAddress MQTT_HOST = IPAddress(192, 168, 0, 1);
 const int MQTT_PORT = 1883;
 const int MQTT_TIMEOUT = 10;
-const int MQTT_PUBLISH_INTERVAL = 3000;
 String MQTT_PUBLISH_TOPIC = "/AD02/Brennholzverleih/Serverraum/%SENSOR_NAME%";
 
 boolean fullyConnected = false;
@@ -35,7 +34,7 @@ boolean connectToWiFi() {
   return true;
 }
 
-boolean connectToMQTT() {
+boolean connectToMQTT(String sensorName) {
   Serial.print((String)"Verbindungsversuch mit MQTT-Broker '" + MQTT_HOST.toString() + "' (Port: " + MQTT_PORT + ", Timeout: " + MQTT_TIMEOUT + " Sekunden) ");
   mqttClient.setServer(MQTT_HOST, MQTT_PORT);
   mqttClient.connect();
@@ -49,19 +48,20 @@ boolean connectToMQTT() {
     delay(1000);
   }
   Serial.println(" erfolgreich!");
-  Serial.println((String)"MQTT Publish interval: " + MQTT_PUBLISH_INTERVAL + "ms");
+  MQTT_PUBLISH_TOPIC.replace("%SENSOR_NAME%", sensorName);
+  Serial.println((String)"MQTT Publish base topic: " + MQTT_PUBLISH_TOPIC);
   Serial.println("-----------------------");
   return true;
 }
 
-void sendMqttMessage(const char* topic, int QoS, const char* message) {
-  uint16_t packetId = mqttClient.publish(topic, QoS, true, message);
-  Serial.println((String)"Sending '" + message + "' on topic '" + topic + "' at QoS " + QoS);
+void sendMqttMessage(String topicExtention, int QoS, const char* message) {
+  uint16_t packetId = mqttClient.publish((MQTT_PUBLISH_TOPIC + topicExtention).c_str(), QoS, true, message);
+  Serial.println((String)"Sending '" + message + "' on topic '" + topicExtention + "' at QoS " + QoS);
 }
 
 
-void templateSetup() {
-  if (connectToWiFi() && connectToMQTT()) {
+void templateSetup(String sensorName) {
+  if (connectToWiFi() && connectToMQTT(sensorName)) {
     fullyConnected = true;
   } else {
     Serial.println("-----------------------");

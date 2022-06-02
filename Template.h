@@ -56,7 +56,7 @@ boolean connectToMQTT() {
 
 void sendMqttMessage(const char* topic, int QoS, const char* message) {
   uint16_t packetId = mqttClient.publish(topic, QoS, true, message);
-  Serial.println((String)"Sending '" + message + "' on topic '" + topic + "' at QoS " + QoS + " (packetId: " + packetId + ")");
+  Serial.println((String)"Sending '" + message + "' on topic '" + topic + "' at QoS " + QoS);
 }
 
 

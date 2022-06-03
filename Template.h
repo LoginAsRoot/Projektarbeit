@@ -60,14 +60,16 @@ void sendMqttMessage(String topicExtention, int QoS, const char* message) {
 }
 
 
-void templateSetup(String sensorName) {
+boolean templateSetup(String sensorName) {
   if (connectToWiFi() && connectToMQTT(sensorName)) {
     fullyConnected = true;
+    return true;
   } else {
     Serial.println("-----------------------");
     Serial.println("ERROR!");
     Serial.println("Um den Sketch nutzen zu können müssen WLAN und MQTT-Broker verbunden sein.");
     Serial.println("Überprüfe deine eingegebenen Daten und starte den ESP neu");
     Serial.println("-----------------------");
+    return false;
   }
 }

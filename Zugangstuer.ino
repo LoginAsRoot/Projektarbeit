@@ -26,7 +26,7 @@ Adafruit_NeoPixel leds(12, WS2812B_PIN, NEO_GRB + NEO_KHZ800);
 
 // DHT22 Config
 #define DHT_PIN 15
-#define DHT_COOLDOWN 5000
+#define DHT_COOLDOWN 10000
 #define MQTT_PUBLISH_TOPIC_EXT_TEMPERATURE "/temperature"
 #define MQTT_PUBLISH_TOPIC_EXT_HUMIDITY "/humidity"
 DHT dht(DHT_PIN, DHT22);
@@ -176,17 +176,16 @@ void readDHT(unsigned long now) {
     float humidity = dht.readHumidity();
     if (isnan(temperature) || isnan(humidity)) {
       Serial.println("ERROR | Failed to read from DHT sensor!");
-      return;
+    } else {
+      uint16_t packetIdDhtPub1_1 = mqttClient.publish("/AD02/Brennholzverleih/Serverraum/Zugangstuer/temperature", 1, true, String(temperature).c_str());
+      Serial.print("Publishing at QoS 1, packetId: ");
+      Serial.println(packetIdDhtPub1_1);
+
+      uint16_t packetIdDhtPub1_2 = mqttClient.publish("/AD02/Brennholzverleih/Serverraum/Zugangstuer/humidity", 1, true, String(humidity).c_str());
+      Serial.print("Publishing at QoS 1, packetId: ");
+      Serial.println(packetIdDhtPub1_2);
     }
 
-    uint16_t packetIdDhtPub1_1 = mqttClient.publish("/AD02/Brennholzverleih/Serverraum/Zugangstuer/temperature", 1, true, String(temperature).c_str());
-    Serial.print("Publishing at QoS 1, packetId: ");
-    Serial.println(packetIdDhtPub1_1);
-
-    uint16_t packetIdDhtPub1_2 = mqttClient.publish("/AD02/Brennholzverleih/Serverraum/Zugangstuer/humidity", 1, true, String(humidity).c_str());
-    Serial.print("Publishing at QoS 1, packetId: ");
-    Serial.println(packetIdDhtPub1_2);
-    
     lastReadTime = now;
   }
 }
@@ -239,168 +238,3 @@ void accessRefused(String rfidContent) {
   leds.fill(leds.Color(255, 0, 0));
   leds.show();
 }
-
-
-
-/*
-
-// ---------------- MQTT ----------------
-
-boolean setupMQTT() {
-  Serial.print((String)"Verbindungsversuch mit MQTT-Broker '" + MQTT_HOST.toString() + "' (Port: " + MQTT_PORT + ", Timeout: " + MQTT_TIMEOUT + " Sekunden) ");
-  mqttClient.onMessage(onMqttMessage);
-  mqttClient.setServer(MQTT_HOST, MQTT_PORT);
-  mqttClient.connect();
-  for (int i = MQTT_TIMEOUT; !mqttClient.connected(); i--) {
-    if (i == 0) {
-      Serial.print(" Fehlgeschlagen!");
-      Serial.println();
-      return false;
-    }
-    Serial.print(".");
-    delay(1000);
-  }
-  Serial.println(" erfolgreich!");
-  Serial.println((String)"MQTT Publish topic: " + MQTT_PUBLISH_TOPIC);
-  Serial.println("-----------------------");
-  mqttClient.subscribe(MQTT_SUBSCRIBE_TOPIC_EXT_TUER.c_str(), 0);
-  return true;
-}
-
-void processMqttMessage(const char* topic, const char* payload) {
-  if (strcmp(topic, MQTT_SUBSCRIBE_TOPIC_EXT_TUER.c_str()) == 0) {
-    if (strcmp(payload, "0") == 0) {
-      Serial.println("Tür zu");
-    } else if (strcmp(payload, "1") == 0) {
-      Serial.println("Tür auf");
-    }
-  }
-}
-
-void onMqttMessage(char* topic, char* payload, AsyncMqttClientMessageProperties properties, size_t len, size_t index, size_t total) {
-  char new_payload[len+1];
-  new_payload[len] = '\0';
-  strncpy(new_payload, payload, len);
-
-  Serial.println((String)"Recieved '" + new_payload + "' on topic '" + topic + "' at QoS " + properties.qos);
-  processMqttMessage(topic, new_payload);
-}
-
-void sendMqttMessage(String topicExtention, int QoS, const char* message) {
-  mqttClient.publish((MQTT_PUBLISH_TOPIC + topicExtention).c_str(), QoS, true, message);
-  Serial.println((String)"Sending '" + message + "' on topic '" + topicExtention + "' at QoS " + QoS);
-}
-
-// ---------------- RFID ----------------
-
-void readRFIDReader(unsigned long now) {
-  static unsigned long lastReadTime;
-  if (now - lastReadTime >= RFID_COOLDOWN) {
-    if (digitalRead(BUILTIN_LED) == LOW) {
-      digitalWrite(BUILTIN_LED, HIGH);
-    }
-    if (mfrc522.PICC_IsNewCardPresent() && mfrc522.PICC_ReadCardSerial()) {
-      String rfidContent = "";
-      for (byte i = 0; i < mfrc522.uid.size; i++) {
-        rfidContent.concat(String(mfrc522.uid.uidByte[i] < 0x10 ? " 0" : " "));
-        rfidContent.concat(String(mfrc522.uid.uidByte[i], HEX));
-      }
-      rfidContent.toUpperCase();
-      if (rfidContent.substring(1) == "39 30 CC C2") {
-        accessGranted(rfidContent.substring(1));
-      } else {
-        accessRefused(rfidContent.substring(1));
-      }
-      lastReadTime = now;
-    }
-  }
-}
-
-void accessGranted(String rfidContent) {
-  sendMqttMessage(MQTT_PUBLISH_TOPIC_EXT_RFID.c_str(), 0, String("Access Granted - " + rfidContent).c_str());
-  mqttClient.publish(MQTT_PUBLISH_TOPIC_LIGHT.c_str(), 0, true, "1");
-  Serial.println((String)"Sending '1' on topic '" + MQTT_PUBLISH_TOPIC_LIGHT + "' at QoS 0");
-  digitalWrite(BUILTIN_LED, LOW);
-  
-  // LEDS
-  for(int i = 0; i < leds.numPixels(); i++) { 
-    leds.setPixelColor(i, leds.Color(0, 255, 0));
-    leds.show();
-    delay(25);
-  }
-  delay(1000);
-  for(int i = 0; i < leds.numPixels(); i++) {
-    leds.setPixelColor(i, leds.Color(0, 0, 0));
-    leds.show();
-    delay(25);
-  }
-}
-
-void accessRefused(String rfidContent) {
-  sendMqttMessage(MQTT_PUBLISH_TOPIC_EXT_RFID.c_str(), 0, String("Access Refused - " + rfidContent).c_str());
-  
-  // LEDS
-  for(int i = 0; i < leds.numPixels(); i++) { 
-    leds.setPixelColor(i, leds.Color(255, 0, 0));
-    leds.show();
-    delay(25);
-  }
-  delay(1000);
-  for(int i = 0; i < leds.numPixels(); i++) {
-    leds.setPixelColor(i, leds.Color(0, 0, 0));
-    leds.show();
-    delay(25);
-  }
-}
-
-// ---------------- SETUP ----------------
-
-#include "DHT22.h";
-//#include "ULTRASONIC.h";
-
-void setup() {
-  Serial.begin(115200);
-  Serial.println();
-  delay(500);
-  Serial.println("ESP wird gestartet");
-  if (setupWiFi() && setupMQTT()) {
-    fullyConnected = true;
-    // DHT22
-    setupDHT();
-
-    // RFID
-    SPI.begin();
-    mfrc522.PCD_Init();
-    
-    // ULTRASONIC
-    //setupULTRASONIC();
-
-    // WS2812B
-    leds.begin();
-    leds.show();
-    leds.setBrightness(150);
-
-    // BUILTIN_LED
-    pinMode(BUILTIN_LED, OUTPUT);
-  } else {
-    Serial.println("-----------------------");
-    Serial.println("ERROR!");
-    Serial.println("Um den Sketch nutzen zu können müssen WLAN und MQTT-Broker verbunden sein.");
-    Serial.println("Überprüfe deine eingegebenen Daten und starte den ESP neu");
-    Serial.println("-----------------------");
-  }
-}
-
-// ---------------- LOOP ----------------
-
-void loop() {
-  if (!fullyConnected)
-    return;
-  unsigned long now = millis();
-  readRFIDReader(now);
-  readTemperature(now);
-  readHumidity(now);
-  //readDistance(now);
-}
-
-*/

@@ -23,9 +23,7 @@ Adafruit_NeoPixel leds(12, WS2812B_PIN, NEO_GRB + NEO_KHZ800);
 
 // DHT22 Config
 #define DHT_PIN 4
-#define DHT_COOLDOWN 5000
-#define MQTT_PUBLISH_TOPIC_EXT_TEMPERATURE "/temperature"
-#define MQTT_PUBLISH_TOPIC_EXT_HUMIDITY "/humidity"
+#define DHT_COOLDOWN 10000
 DHT dht(DHT_PIN, DHT22);
 
 boolean fullyConnected =  false;
@@ -209,17 +207,16 @@ void readDHT(unsigned long now) {
     float humidity = dht.readHumidity();
     if (isnan(temperature) || isnan(humidity)) {
       Serial.println("ERROR | Failed to read from DHT sensor!");
-      return;
+    } else {
+      uint16_t packetIdDhtPub1_1 = mqttClient.publish("/AD02/Brennholzverleih/Serverraum/Serverraum01/temperature", 1, true, String(temperature).c_str());
+      Serial.print("Publishing at QoS 1, packetId: ");
+      Serial.println(packetIdDhtPub1_1);
+
+      uint16_t packetIdDhtPub1_2 = mqttClient.publish("/AD02/Brennholzverleih/Serverraum/Serverraum01/humidity", 1, true, String(humidity).c_str());
+      Serial.print("Publishing at QoS 1, packetId: ");
+      Serial.println(packetIdDhtPub1_2);
     }
 
-    uint16_t packetIdDhtPub1_1 = mqttClient.publish("/AD02/Brennholzverleih/Serverraum/Serverraum01/temperature", 1, true, String(temperature).c_str());
-    Serial.print("Publishing at QoS 1, packetId: ");
-    Serial.println(packetIdDhtPub1_1);
-
-    uint16_t packetIdDhtPub1_2 = mqttClient.publish("/AD02/Brennholzverleih/Serverraum/Serverraum01/humidity", 1, true, String(humidity).c_str());
-    Serial.print("Publishing at QoS 1, packetId: ");
-    Serial.println(packetIdDhtPub1_2);
-    
     lastReadTime = now;
   }
 }

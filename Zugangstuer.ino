@@ -70,6 +70,10 @@ void onMqttConnect(bool sessionPresent) {
   
   Serial.print("Session present: ");
   Serial.println(sessionPresent);
+
+  uint16_t packetIdPub1 = mqttClient.publish("/AD02/Brennholzverleih/Serverraum/Zugangstuer/status", 2, true, "online");
+  Serial.print("Publishing status at QoS 2, packetId: ");
+  Serial.println(packetIdPub1);
 }
 
 void onMqttDisconnect(AsyncMqttClientDisconnectReason reason) {
@@ -130,6 +134,8 @@ void setup() {
   wifiConnectHandler = WiFi.onStationModeGotIP(onWifiConnect);
   wifiDisconnectHandler = WiFi.onStationModeDisconnected(onWifiDisconnect);
 
+  
+  mqttClient.setKeepAlive(15).setWill("/AD02/Brennholzverleih/Serverraum/Zugangstuer/status", 2, true, "offline");
   mqttClient.onConnect(onMqttConnect);
   mqttClient.onDisconnect(onMqttDisconnect);
   mqttClient.onSubscribe(onMqttSubscribe);
@@ -178,11 +184,11 @@ void readDHT(unsigned long now) {
       Serial.println("ERROR | Failed to read from DHT sensor!");
     } else {
       uint16_t packetIdDhtPub1_1 = mqttClient.publish("/AD02/Brennholzverleih/Serverraum/Zugangstuer/temperature", 1, true, String(temperature).c_str());
-      Serial.print("Publishing at QoS 1, packetId: ");
+      Serial.print("Publishing temperature at QoS 1, packetId: ");
       Serial.println(packetIdDhtPub1_1);
-
+  
       uint16_t packetIdDhtPub1_2 = mqttClient.publish("/AD02/Brennholzverleih/Serverraum/Zugangstuer/humidity", 1, true, String(humidity).c_str());
-      Serial.print("Publishing at QoS 1, packetId: ");
+      Serial.print("Publishing humidity at QoS 1, packetId: ");
       Serial.println(packetIdDhtPub1_2);
     }
 
@@ -219,11 +225,11 @@ void readRFID(unsigned long now) {
 
 void accessGranted(String rfidContent) {
   uint16_t packetIdRfidPub1 = mqttClient.publish("/AD02/Brennholzverleih/Serverraum/Zugangstuer/rfid", 1, true, String("Access Granted - " + rfidContent).c_str());
-  Serial.print("Publishing at QoS 1, packetId: ");
+  Serial.print("Publishing rfid at QoS 1, packetId: ");
   Serial.println(packetIdRfidPub1);
 
   uint16_t packetIdLightPub1 = mqttClient.publish("/AD02/Brennholzverleih/Serverraum/licht", 1, true, "1");
-  Serial.print("Publishing at QoS 1, packetId: ");
+  Serial.print("Publishing licht at QoS 1, packetId: ");
   Serial.println(packetIdLightPub1);
   leds.fill(leds.Color(0, 255, 0));
   leds.show();
@@ -232,7 +238,7 @@ void accessGranted(String rfidContent) {
 
 void accessRefused(String rfidContent) {
   uint16_t packetIdRfidPub1 = mqttClient.publish("/AD02/Brennholzverleih/Serverraum/Zugangstuer/rfid", 1, true, String("Access Refused - " + rfidContent).c_str());
-  Serial.print("Publishing at QoS 1, packetId: ");
+  Serial.print("Publishing rfid at QoS 1, packetId: ");
   Serial.println(packetIdRfidPub1);
   
   leds.fill(leds.Color(255, 0, 0));

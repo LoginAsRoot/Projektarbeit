@@ -15,7 +15,7 @@
 // WS2812B Config
 #define WS2812B_PIN 0
 Adafruit_NeoPixel leds(12, WS2812B_PIN, NEO_GRB + NEO_KHZ800);
-#define WS2812B_LIGHT_COLOR leds.Color(52,168,174)
+#define WS2812B_LIGHT_COLOR leds.Color(255,255,255)
 
 // Light Button Config
 #define LIGHT_BUTTON_PIN 5
@@ -25,6 +25,11 @@ Adafruit_NeoPixel leds(12, WS2812B_PIN, NEO_GRB + NEO_KHZ800);
 #define DHT_PIN 4
 #define DHT_COOLDOWN 10000
 DHT dht(DHT_PIN, DHT22);
+
+// Ultrasonic Config
+#define ULTRASONIC_TRIG_PIN 13 //D7
+#define ULTRASONIC_ECHO_PIN 16
+#define ULTRASONIC_COOLDOWN 2500
 
 boolean fullyConnected =  false;
 boolean lightOn = false;
@@ -60,6 +65,7 @@ void connectToMqtt() {
 
 void onMqttConnect(bool sessionPresent) {
   fullyConnected = true;
+  digitalWrite(BUILTIN_LED, LOW);
   Serial.println("Connected to MQTT.");
   
   Serial.print("Session present: ");
@@ -68,6 +74,10 @@ void onMqttConnect(bool sessionPresent) {
   uint16_t packetIdSub = mqttClient.subscribe("/AD02/Brennholzverleih/Serverraum/licht", 1);
   Serial.print("Subscribing at QoS 1, packetId: ");
   Serial.println(packetIdSub);
+
+  uint16_t packetIdPub1 = mqttClient.publish("/AD02/Brennholzverleih/Serverraum/Serverraum01/status", 2, true, "online");
+  Serial.print("Publishing status at QoS 2, packetId: ");
+  Serial.println(packetIdPub1);
 }
 
 void onMqttDisconnect(AsyncMqttClientDisconnectReason reason) {
@@ -136,6 +146,7 @@ void setup() {
   wifiConnectHandler = WiFi.onStationModeGotIP(onWifiConnect);
   wifiDisconnectHandler = WiFi.onStationModeDisconnected(onWifiDisconnect);
 
+  mqttClient.setKeepAlive(15).setWill("/AD02/Brennholzverleih/Serverraum/Serverraum01/status", 2, true, "offline");
   mqttClient.onConnect(onMqttConnect);
   mqttClient.onDisconnect(onMqttDisconnect);
   mqttClient.onSubscribe(onMqttSubscribe);
@@ -153,15 +164,21 @@ void setup() {
   leds.show();
 
   pinMode(LIGHT_BUTTON_PIN, INPUT);
+  pinMode(BUILTIN_LED, OUTPUT);
+  pinMode(ULTRASONIC_TRIG_PIN, OUTPUT);
+  pinMode(ULTRASONIC_ECHO_PIN, INPUT);
 }
 
 void loop() {
-  if (!fullyConnected)
+  if (!fullyConnected) {
+    if (digitalRead(BUILTIN_LED) == LOW)
+      digitalWrite(BUILTIN_LED, HIGH);
     return;
+  }
   unsigned long now = millis();
   readDHT(now);
   readLightButton(now);
-  
+  readDistance(now);
 }
 
 // ------------- WS2812B -------------
@@ -170,12 +187,14 @@ void turnLightOn() {
   leds.fill(WS2812B_LIGHT_COLOR);
   leds.show();
   lightOn = true;
+  mqttClient.publish("/AD02/Brennholzverleih/Serverraum/licht/status", 1, true, "1");
 }
 
 void turnLightOff() {
   leds.clear();
   leds.show();
   lightOn = false;
+  mqttClient.publish("/AD02/Brennholzverleih/Serverraum/licht/status", 1, true, "0");
 }
 
 void toggleLight() {
@@ -209,14 +228,35 @@ void readDHT(unsigned long now) {
       Serial.println("ERROR | Failed to read from DHT sensor!");
     } else {
       uint16_t packetIdDhtPub1_1 = mqttClient.publish("/AD02/Brennholzverleih/Serverraum/Serverraum01/temperature", 1, true, String(temperature).c_str());
-      Serial.print("Publishing at QoS 1, packetId: ");
+      Serial.print("Publishing temperature at QoS 1, packetId: ");
       Serial.println(packetIdDhtPub1_1);
-
+  
       uint16_t packetIdDhtPub1_2 = mqttClient.publish("/AD02/Brennholzverleih/Serverraum/Serverraum01/humidity", 1, true, String(humidity).c_str());
-      Serial.print("Publishing at QoS 1, packetId: ");
+      Serial.print("Publishing humidity at QoS 1, packetId: ");
       Serial.println(packetIdDhtPub1_2);
     }
+    
+    lastReadTime = now;
+  }
+}
 
+// ------------- ULTRASONIC -------------
+
+void readDistance(unsigned long now) {
+  static unsigned long lastReadTime;
+  if (now - lastReadTime >= ULTRASONIC_COOLDOWN) {
+    digitalWrite(ULTRASONIC_TRIG_PIN, LOW);
+    delayMicroseconds(5);
+    digitalWrite(ULTRASONIC_TRIG_PIN, HIGH);
+    delayMicroseconds(10);
+    digitalWrite(ULTRASONIC_TRIG_PIN, LOW);
+    
+    long dauer = pulseIn(ULTRASONIC_ECHO_PIN, HIGH);
+    float abstand = dauer * 0.034 / 2;
+    
+    uint16_t packetIdDhtPub1_1 = mqttClient.publish("/AD02/Brennholzverleih/Serverraum/Serverraum01/ultrasonic", 1, true, String(abstand).c_str());
+    Serial.print("Publishing ultrasonic at QoS 1, packetId: ");
+    Serial.println(packetIdDhtPub1_1);
     lastReadTime = now;
   }
 }
